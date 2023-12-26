@@ -4,10 +4,18 @@ from spade.behaviour import CyclicBehaviour, OneShotBehaviour
 from spade.message import Message
 import json
 import asyncio
+import random
 
 class GraphNodeAgent(Agent):
+    def get_noisy_value(self):
+        noise = random.uniform(-1, 1) # Noise
+        return self.value + noise
+
     class CommunicateNeighboursBehaviour(CyclicBehaviour):
         async def run(self):
+            processing_delay = random.uniform(0, 1.0) # Random message processing delay
+            await asyncio.sleep(processing_delay)
+
             if self.agent.active:
                 msg = await self.receive(timeout=10)
                 if msg:
@@ -15,23 +23,23 @@ class GraphNodeAgent(Agent):
                     sender = str(msg.sender)
                     self.agent.received_values[sender] = content['value']
 
-                    if len(self.agent.received_values) == len(self.agent.neighbors):
-                        await self.agent.calculate_mean()
+                    await asyncio.sleep(2) # Changed mean calculation condition to account for dynamic links
+                    await self.agent.calculate_mean()
 
     class SendValueToNeighboursBehaviour(CyclicBehaviour):
         async def run(self):
-            await asyncio.sleep(1)
+            await asyncio.sleep(1 + random.uniform(0, 1.0)) # Random message sending delay
             if self.agent.active:
                 for neighbor in self.agent.neighbors:
-                    message = Message(to=neighbor)
-                    message.set_metadata("performative", "inform")
-                    message.body = json.dumps({'value': self.agent.value})
-                    await self.send(message)
-
-                self.agent.received_values.clear()
+                    if random.random() < 0.8: # Chance to send message (dynamic links between agents)
+                        message = Message(to=neighbor)
+                        message.set_metadata("performative", "inform")
+                        noisy_value = self.agent.get_noisy_value()
+                        message.body = json.dumps({'value': noisy_value})
+                        await self.send(message)
             else:
-                self.kill()      
-    
+                self.kill()
+
     async def setup(self):
         self.received_values = {}
         self.active = True
@@ -75,7 +83,7 @@ async def main():
     for agent in agents:
         agent.add_behaviour(agent.send_behaviour)
 
-    await asyncio.sleep(10)
+    await asyncio.sleep(100)
 
     for agent in agents:
         await agent.stop()
